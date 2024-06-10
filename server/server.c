@@ -13,9 +13,13 @@
 #define PORT "4000"
 #define BACKLOG 10
 #define HOSTBUFFER_SIZE 50
+#define MAX_REQ_SIZE 2048
+#define FILE_BUFF 1024
 
 void fill_my_ip(char *buffer);
 void handle_sigchld(int sig);
+void handle_request(int fd);
+void send_res(int fd, char *path);
 
 int main()
 {
@@ -102,13 +106,8 @@ int main()
         if (!fork())
         {
             close(serverfd);
-            char *http_res = "HTTP/1.1 200 OK\r\n"
-                             "Content-Type: text/plain\r\n"
-                             "Content-Length: 13\r\n"
-                             "\r\n"
-                             "Hello, world!";
-            if (send(newfd, http_res, strlen(http_res), 0) == -1)
-                perror("send");
+
+            handle_request(newfd);
             close(newfd);
             exit(0);
         }
@@ -149,4 +148,77 @@ void handle_sigchld(int sig)
     while (waitpid(-1, NULL, WNOHANG) > 0)
         ;
     errno = saved_errno;
+}
+
+void handle_request(int fd)
+{
+    char req_buff[MAX_REQ_SIZE];
+    int bytes_recv;
+
+    if ((bytes_recv = recv(fd, req_buff, MAX_REQ_SIZE - 1, 0)) == -1)
+    {
+        perror("recv");
+        exit(1);
+    }
+    req_buff[bytes_recv] = '\0';
+
+    // Parse the request
+    // GET /path?query HTTP/1.1
+    // ...
+    char *method = strtok(req_buff, " ");
+    char *path = strtok(NULL, " ");
+    char *query = strchr(path, '?');
+    if (query)
+    {
+        *query = '\0';
+        query++;
+    }
+    else
+    {
+        query = "";
+    }
+    char *protocol = strtok(NULL, "\r\n");
+
+    // Send reponse
+    send_res(fd, path);
+}
+
+void send_res(int fd, char *path)
+{
+    if (strcmp(path, "/") == 0)
+    {
+        char *header = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
+        char *body = "<h1>Hello, I am <a href=\"https://sulabhkatila.github.io/\">Sulabh Katila</a>!</h1>";
+        send(fd, header, strlen(header), 0);
+        send(fd, body, strlen(body), 0);
+    }
+    else if (strcmp(path, "/signature.gif") == 0)
+    {
+        char *header = "HTTP/1.1 200 OK\r\nContent-Type: image/gif\r\n\r\n";
+        send(fd, header, strlen(header), 0);
+
+        FILE *file = fopen("../assets/signature.gif", "r");
+        if (file == NULL)
+        {
+            perror("fopen");
+            exit(1);
+        }
+
+        char f_buff[FILE_BUFF];
+        int bytes_read;
+        while ((bytes_read = fread(f_buff, 1, sizeof(f_buff), file)) > 0)
+        {
+            send(fd, f_buff, bytes_read, 0);
+        }
+
+        fclose(file);
+    }
+    else
+    {
+        // 404 Not Found
+        char *header = "HTTP/1.1 404 NOT FOUND\r\nContent-Type: text/html\r\n\r\n";
+        char *body = "<h1>404 Not Found</h1>";
+        send(fd, header, strlen(header), 0);
+        send(fd, body, strlen(body), 0);
+    }
 }
