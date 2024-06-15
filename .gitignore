@@ -1,2 +1,2 @@
-server/*.o
-server/server
+main
+obj/*.o
