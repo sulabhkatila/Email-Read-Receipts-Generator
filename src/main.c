@@ -9,8 +9,10 @@
 #include <netdb.h>
 #include <signal.h>
 #include <string.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
 
-#define PORT "4000"
+#define PORT "443"
 #define BACKLOG 10
 #define HOSTBUFFER_SIZE 50
 #define MAX_REQ_SIZE 2048
@@ -18,8 +20,12 @@
 
 void fill_my_ip(char *buffer);
 void handle_sigchld(int sig);
-void handle_request(int fd);
+void handle_http_request(int fd);
+void handle_https_request(SSL *ssl);
 void send_res(int fd, char *path);
+void send_https_res(SSL *ssl, char *path);
+SSL_CTX *create_context();
+void configure_context(SSL_CTX *ctx);
 
 int main()
 {
@@ -36,10 +42,15 @@ int main()
     }
 
     int serverfd, newfd;
+    SSL_CTX *ctx;
+    SSL *ssl;
     struct addrinfo hints, *res, *r;
     struct sockaddr_storage client_addr;
     socklen_t sin_size;
     char addr4[INET_ADDRSTRLEN]; // IPv4
+
+    ctx = create_context();
+    configure_context(ctx);      
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET; // IPv4
@@ -102,13 +113,30 @@ int main()
 
         inet_ntop(client_addr.ss_family, &((struct sockaddr_in *)&client_addr)->sin_addr, addr4, sizeof addr4); // IPv4
         printf("server: got connection from %s\n", addr4);
-
+        
         if (!fork())
         {
             close(serverfd);
+            
+            ssl = SSL_new(ctx);
+            SSL_set_fd(ssl, newfd);
+            
+            if (SSL_accept(ssl) <= 0)
+            {
+              ERR_print_errors_fp(stderr);
+            }
+            else
+            {
+              // handle request with ssl
+              handle_https_request(ssl);
+            }
+            
+            SSL_shutdown(ssl);
+            SSL_free(ssl);
 
-            handle_request(newfd);
+            // handle_request(newfd);
             close(newfd);
+            printf("connection closed");
             exit(0);
         }
         close(newfd);
@@ -150,7 +178,7 @@ void handle_sigchld(int sig)
     errno = saved_errno;
 }
 
-void handle_request(int fd)
+void handle_http_request(int fd)
 {
     char req_buff[MAX_REQ_SIZE];
     int bytes_recv;
@@ -221,4 +249,168 @@ void send_res(int fd, char *path)
         send(fd, header, strlen(header), 0);
         send(fd, body, strlen(body), 0);
     }
+}
+
+SSL_CTX *create_context()
+{
+    const SSL_METHOD *method;
+    SSL_CTX *ctx;
+
+    method = TLS_server_method();
+    ctx = SSL_CTX_new(method);
+    if (!ctx)
+    {
+        perror("SSL context");
+        ERR_print_errors_fp(stderr);
+        exit(EXIT_FAILURE);
+    }
+
+    return ctx;
+}
+
+void configure_context(SSL_CTX *ctx)
+{
+    if (SSL_CTX_use_certificate_file(ctx, /*"/etc/letsencrypt/live/emailapi.endpoints.isentropic-card-423523-k4.cloud.goog/fullchain.pem"*/"/home/sulabhkatila/cerver/files/certificate.pem", SSL_FILETYPE_PEM) <= 0)
+    {
+        ERR_print_errors_fp(stderr);
+        exit(EXIT_FAILURE);
+    }
+
+    if (SSL_CTX_use_PrivateKey_file(ctx, /*"/etc/letsencrypt/live/emailapi.endpoints.isentropic-card-423523-k4.cloud.goog/privkey.pem"*/"/home/sulabhkatila/cerver/files/privkey.pem", SSL_FILETYPE_PEM) <= 0)
+    {
+        ERR_print_errors_fp(stderr);
+        exit(EXIT_FAILURE);
+    }
+}
+
+void handle_https_request(SSL *ssl)
+{
+    char req_buff[MAX_REQ_SIZE];
+    int bytes_recv;
+    int total_bytes_recv = 0;
+    
+    bytes_recv = SSL_read(ssl, req_buff, MAX_REQ_SIZE);
+    total_bytes_recv = bytes_recv;  // FIX THE LOOP
+    // Receive the request in a loop
+    // while ((bytes_recv = SSL_read(ssl, req_buff + total_bytes_recv, MAX_REQ_SIZE - total_bytes_recv - 1)) > 0)
+    // {
+    //     total_bytes_recv += bytes_recv;
+    // }
+    printf("size of the bytes read %ld\n", sizeof(bytes_recv));
+    printf("this was read %s\n", req_buff);
+
+    if (bytes_recv <= 0) {
+        fprintf(stderr, "SSL_read failed with error %d\n", SSL_get_error(ssl, bytes_recv));
+        ERR_print_errors_fp(stderr);
+        exit(1);
+    }
+
+    printf("read successfull");
+    fflush(stdout);
+    req_buff[total_bytes_recv] = '\0';
+    
+    printf("The DATA IS: \n", req_buff);
+    fflush(stdout);
+    // Parse the request
+    // GET /path?query HTTP/1.1
+    // ...
+    char *method = strtok(req_buff, " ");
+    printf("the method is %s\n", method);
+    char *path = strtok(NULL, " ");
+    printf("The path is %s", path);
+    fflush(stdout);
+    char *query = strchr(path, '?');
+    printf("\nthe query is %s\n", query);
+    printf("the method is %s\nthe path is %s\n");
+    fflush(stdout);
+    if (query)
+    {
+        *query = '\0';
+        query++;
+    }
+    else
+    {
+        query = "";
+    }
+    char *protocol = strtok(NULL, "\r\n");
+    
+    printf("calling send https_res");
+    fflush(stdout);
+    // Send response
+    send_https_res(ssl, path);
+    printf("called send-https");
+    fflush(stdout);
+}
+
+void send_all_res(SSL *ssl, const char *data, size_t data_len)
+{
+    size_t bytes_sent = 0;
+    int result;
+
+    while (bytes_sent < data_len)
+              fflush(stdout);
+    {
+        result = SSL_write(ssl, data + bytes_sent, data_len - bytes_sent);
+        if (result <= 0)
+        {
+            ERR_print_errors_fp(stderr);
+            exit(1);
+        }
+        bytes_sent += result;
+    }
+}
+
+void send_https_res(SSL *ssl, char *path)
+{
+    
+    printf("send_https_res\n");
+    fflush(stdout);
+    if (strcmp(path, "/") == 0)
+    {   
+        printf("inside path comparison '/'");
+        fflush(stdout);
+        //const char reply[] = "test\n";
+        //printf("writing to ssl\n");
+        //fflush(stdout);
+        //SSL_write(ssl, reply, strlen(reply));
+        //printf("written to ssl\n");
+        //fflush(stdout);
+        // char *header = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
+        // char *body = "<h1>Hello, I am <a href=\"https://sulabhkatila.github.io/\">Sulabh Katila</a>!</h1>";
+        
+        char reply[] = "HTTP/1.1 200 OK\r\nDate: Sun, 16 Jun 2024 12:00:00 GMT\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Length: 137\r\nConnection: keep-alive\r\nServer: Apache/2.4.41 (Ubuntu)\r\nLast-Modified: Tue, 15 Jun 2024 10:00:00 GMT\r\nETag: \"89-5a3bc9d7dcb80\"\r\nAccept-Ranges: bytes\r\n\r\n<!DOCTYPE html>\n<html>\n<head>\n    <title>Example Page</title>\n</head>\n<body>\n    <h1>Hello, World!</h1>\n    </body>\n</html>";
+ 
+        SSL_write(ssl, reply, strlen(reply));
+        // send_all_res(ssl, header, strlen(header));
+        // send_all_res(ssl, body, strlen(body));
+    }
+    else if (strcmp(path, "/signature.gif") == 0)
+    {
+        char *header = "HTTP/1.1 200 OK\r\nContent-Type: image/gif\r\n\r\n";
+        send_all_res(ssl, header, strlen(header));
+
+        FILE *file = fopen("../assets/signature.gif", "r");
+        if (file == NULL)
+        {
+            perror("fopen");
+            exit(1);
+        }
+
+        char f_buff[FILE_BUFF];
+        int bytes_read;
+        while ((bytes_read = fread(f_buff, 1, sizeof(f_buff), file)) > 0)
+        {
+            send_all_res(ssl, f_buff, bytes_read);
+        }
+
+        fclose(file);
+    }
+    else
+    {
+        // 404 Not Found
+        char *header = "HTTP/1.1 404 NOT FOUND\r\nContent-Type: text/html\r\n\r\n";
+        char *body = "<h1>404 Not Found</h1>";
+        send_all_res(ssl, header, strlen(header));
+        send_all_res(ssl, body, strlen(body));
+    }    
 }
