@@ -21,7 +21,6 @@
 void fill_my_ip(char *buffer);
 void handle_sigchld(int sig);
 void handle_https_request(SSL *ssl);
-void send_res(int fd, char *path);
 void send_https_res(SSL *ssl, char *path);
 SSL_CTX *create_context();
 void configure_context(SSL_CTX *ctx);
