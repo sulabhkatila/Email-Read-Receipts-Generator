@@ -9,8 +9,10 @@
 #include <netdb.h>
 #include <signal.h>
 #include <string.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
 
-#define PORT "4000"
+#define PORT "443"
 #define BACKLOG 10
 #define HOSTBUFFER_SIZE 50
 #define MAX_REQ_SIZE 2048
@@ -18,8 +20,10 @@
 
 void fill_my_ip(char *buffer);
 void handle_sigchld(int sig);
-void handle_request(int fd);
-void send_res(int fd, char *path);
+void handle_https_request(SSL *ssl);
+void send_https_res(SSL *ssl, char *path);
+SSL_CTX *create_context();
+void configure_context(SSL_CTX *ctx);
 
 int main()
 {
@@ -36,13 +40,18 @@ int main()
     }
 
     int serverfd, newfd;
+    SSL_CTX *ctx;
+    SSL *ssl;
     struct addrinfo hints, *res, *r;
     struct sockaddr_storage client_addr;
     socklen_t sin_size;
-    char addr4[INET_ADDRSTRLEN]; // IPv4
+    char addr4[INET_ADDRSTRLEN];    // IPv4
+
+    ctx = create_context();
+    configure_context(ctx);
 
     memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_INET; // IPv4
+    hints.ai_family = AF_INET;      // IPv4
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
 
@@ -56,7 +65,7 @@ int main()
     for (r = res; r != NULL; r = r->ai_next)
     {
         if ((serverfd = socket(r->ai_family, r->ai_socktype, r->ai_protocol)) == -1)
-        { // AF_INET and PF_INET are basically the same thing
+        {   // AF_INET and PF_INET are basically the same thing
             perror("server: socket");
             continue;
         }
@@ -107,8 +116,25 @@ int main()
         {
             close(serverfd);
 
-            handle_request(newfd);
+            ssl = SSL_new(ctx);
+            SSL_set_fd(ssl, newfd);
+
+            if (SSL_accept(ssl) <= 0)
+            {
+                ERR_print_errors_fp(stderr);
+            }
+            else
+            {
+                // handle request with ssl
+                handle_https_request(ssl);
+            }
+
+            SSL_shutdown(ssl);
+            SSL_free(ssl);
+
+            // handle_request(newfd);
             close(newfd);
+            printf("connection closed");
             exit(0);
         }
         close(newfd);
@@ -150,24 +176,77 @@ void handle_sigchld(int sig)
     errno = saved_errno;
 }
 
-void handle_request(int fd)
+SSL_CTX *create_context()
+{
+    const SSL_METHOD *method;
+    SSL_CTX *ctx;
+
+    method = TLS_server_method();
+    ctx = SSL_CTX_new(method);
+    if (!ctx)
+    {
+        perror("SSL context");
+        ERR_print_errors_fp(stderr);
+        exit(EXIT_FAILURE);
+    }
+
+    return ctx;
+}
+
+void configure_context(SSL_CTX *ctx)
+{
+    if (SSL_CTX_use_certificate_file(ctx, "/home/sulabhkatila/cerver/files/certificate.pem", SSL_FILETYPE_PEM) <= 0)
+    {
+        ERR_print_errors_fp(stderr);
+        exit(EXIT_FAILURE);
+    }
+
+    if (SSL_CTX_use_PrivateKey_file(ctx, "/home/sulabhkatila/cerver/files/privkey.pem", SSL_FILETYPE_PEM) <= 0)
+    {
+        ERR_print_errors_fp(stderr);
+        exit(EXIT_FAILURE);
+    }
+}
+
+void handle_https_request(SSL *ssl)
 {
     char req_buff[MAX_REQ_SIZE];
     int bytes_recv;
+    int total_bytes_recv = 0;
 
-    if ((bytes_recv = recv(fd, req_buff, MAX_REQ_SIZE - 1, 0)) == -1)
+    // Receive the request in a loop
+    while ((bytes_recv = SSL_read(ssl, req_buff + total_bytes_recv, MAX_REQ_SIZE - total_bytes_recv - 1)) > 0)
     {
-        perror("recv");
+        fflush(stdout);
+        total_bytes_recv += bytes_recv;
+
+        // Break if received complete message or Filled the req_buff
+        if (req_buff[total_bytes_recv - 1] == '\n' || total_bytes_recv == MAX_REQ_SIZE - 1) break; 
+    }
+
+    if (bytes_recv <= 0)
+    {
+        fprintf(stderr, "SSL_read failed with error %d\n", SSL_get_error(ssl, bytes_recv));
+        ERR_print_errors_fp(stderr);
         exit(1);
     }
-    req_buff[bytes_recv] = '\0';
 
+    req_buff[total_bytes_recv] = '\0';
+    
+    
+    printf("The DATA IS: %s\n", req_buff);
+    fflush(stdout);
     // Parse the request
     // GET /path?query HTTP/1.1
     // ...
     char *method = strtok(req_buff, " ");
+    printf("the mehod is : %s\n", method);
     char *path = strtok(NULL, " ");
+    printf("the path is : %s\n", path);
     char *query = strchr(path, '?');
+    printf("the query is : %s\n", query);
+
+    fflush(stdout);
     if (query)
     {
         *query = '\0';
@@ -179,25 +258,44 @@ void handle_request(int fd)
     }
     char *protocol = strtok(NULL, "\r\n");
 
-    // Send reponse
-    send_res(fd, path);
+    // Send response
+    send_https_res(ssl, path);
 }
 
-void send_res(int fd, char *path)
+void send_all_res(SSL *ssl, const char *data, size_t data_len)
 {
+    size_t bytes_sent = 0;
+    int result;
+
+    while (bytes_sent < data_len)
+    {
+        result = SSL_write(ssl, data + bytes_sent, data_len - bytes_sent);
+        if (result <= 0)
+        {
+            ERR_print_errors_fp(stderr);
+            exit(1);
+        }
+        bytes_sent += result;
+    }
+}
+
+void send_https_res(SSL *ssl, char *path)
+{
+
     if (strcmp(path, "/") == 0)
     {
         char *header = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
         char *body = "<h1>Hello, I am <a href=\"https://sulabhkatila.github.io/\">Sulabh Katila</a>!</h1>";
-        send(fd, header, strlen(header), 0);
-        send(fd, body, strlen(body), 0);
+
+        send_all_res(ssl, header, strlen(header));
+        send_all_res(ssl, body, strlen(body));
     }
     else if (strcmp(path, "/signature.gif") == 0)
     {
         char *header = "HTTP/1.1 200 OK\r\nContent-Type: image/gif\r\n\r\n";
-        send(fd, header, strlen(header), 0);
+        send_all_res(ssl, header, strlen(header));
 
-        FILE *file = fopen("../assets/signature.gif", "r");
+        FILE *file = fopen("assets/signature.gif", "r");
         if (file == NULL)
         {
             perror("fopen");
@@ -208,7 +306,7 @@ void send_res(int fd, char *path)
         int bytes_read;
         while ((bytes_read = fread(f_buff, 1, sizeof(f_buff), file)) > 0)
         {
-            send(fd, f_buff, bytes_read, 0);
+            send_all_res(ssl, f_buff, bytes_read);
         }
 
         fclose(file);
@@ -218,7 +316,7 @@ void send_res(int fd, char *path)
         // 404 Not Found
         char *header = "HTTP/1.1 404 NOT FOUND\r\nContent-Type: text/html\r\n\r\n";
         char *body = "<h1>404 Not Found</h1>";
-        send(fd, header, strlen(header), 0);
-        send(fd, body, strlen(body), 0);
+        send_all_res(ssl, header, strlen(header));
+        send_all_res(ssl, body, strlen(body));
     }
 }
