@@ -1,4 +1,2 @@
 main
-obj/*.o
-files/*.log
-files/*.pem
+obj
