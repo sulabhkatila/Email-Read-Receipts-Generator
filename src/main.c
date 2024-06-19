@@ -9,6 +9,8 @@
 #include <netdb.h>
 #include <signal.h>
 #include <string.h>
+#include <time.h>
+#include <pthread.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
@@ -17,13 +19,24 @@
 #define HOSTBUFFER_SIZE 50
 #define MAX_REQ_SIZE 2048
 #define FILE_BUFF 1024
+#define DATE_LEN 15
+#define TIME_LEN 15
 
 void handle_sigchld(int sig);
 int get_listner_socket();
 void handle_https_request(SSL *ssl);
-void send_https_res(SSL *ssl, char *path);
+void *log_to_signature(void *l);
+void fill_date_and_time(char *datestr, char *timestr);
+void send_https_res(SSL *ssl, char *path, char *query);
 SSL_CTX *create_context();
 void configure_context(SSL_CTX *ctx);
+
+typedef struct signature_log_args
+{
+    char *f;
+    char *t;
+    char *n;
+} signature_log_args;
 
 int main()
 {
@@ -38,6 +51,10 @@ int main()
         perror("sigaction");
         exit(1);
     }
+
+    // Set the timezone to UTC
+    setenv("TZ", "UTC", 1);
+    tzset();
 
     int serverfd, newfd; // Listen on serverfd
                          // new connection on newfd
@@ -232,7 +249,6 @@ void handle_https_request(SSL *ssl)
     char *path = strtok(NULL, " ");
     char *query = strchr(path, '?');
 
-    fflush(stdout);
     if (query)
     {
         *query = '\0';
@@ -245,7 +261,7 @@ void handle_https_request(SSL *ssl)
     char *protocol = strtok(NULL, "\r\n");
 
     // Send response
-    send_https_res(ssl, path);
+    send_https_res(ssl, path, query);
 }
 
 void send_all_res(SSL *ssl, const char *data, size_t data_len)
@@ -265,7 +281,7 @@ void send_all_res(SSL *ssl, const char *data, size_t data_len)
     }
 }
 
-void send_https_res(SSL *ssl, char *path)
+void send_https_res(SSL *ssl, char *path, char *query)
 {
     if (strcmp(path, "/") == 0)
     {
@@ -277,6 +293,21 @@ void send_https_res(SSL *ssl, char *path)
     }
     else if (strcmp(path, "/signature.gif") == 0)
     {
+        pthread_t log_thread;
+
+        // query can be ?f=somevalue&t=somevalue&n=somevalue
+        if (query)
+        {
+            signature_log_args args = {
+                .f = strtok(query, "&"),
+                .t = strtok(NULL, "&"),
+                .n = strtok(NULL, "&")
+            };
+
+            // log to signature.log
+            pthread_create(&log_thread, NULL, log_to_signature, (void *)&args);
+        }
+
         char *header = "HTTP/1.1 200 OK\r\nContent-Type: image/gif\r\n\r\n";
         send_all_res(ssl, header, strlen(header));
 
@@ -295,6 +326,8 @@ void send_https_res(SSL *ssl, char *path)
         }
 
         fclose(file);
+        if (query)
+            pthread_join(log_thread, NULL);
     }
     else
     {
@@ -304,4 +337,35 @@ void send_https_res(SSL *ssl, char *path)
         send_all_res(ssl, header, strlen(header));
         send_all_res(ssl, body, strlen(body));
     }
+}
+
+void *log_to_signature(void *l)
+{
+    
+    FILE *log = fopen("files/signature.log", "a");
+    if (log == NULL)
+    {
+        perror("fopen");
+        exit(1);
+    }
+
+    // f's value ;; t's value ;; n's value ;; date ;; time
+    char datestr[DATE_LEN], timestr[TIME_LEN];
+    fill_date_and_time(datestr, timestr);
+
+    fprintf(log, "%s ;; %s ;; %s ;; %s ;; %s\n", ((signature_log_args *)l)->f, ((signature_log_args *)l)->t, ((signature_log_args *)l)->n, datestr, timestr);
+
+    fclose(log);
+    return NULL;
+}
+
+void fill_date_and_time(char *datestr, char *timestr)
+{
+    time_t t = time(NULL);
+    struct tm *tm = localtime(&t);
+
+    strftime(datestr, DATE_LEN - 1, "%Y-%m-%d", tm);
+    strftime(timestr, TIME_LEN - 1, "%H:%M:%S", tm);
+    datestr[DATE_LEN - 1] = '\0';
+    timestr[TIME_LEN - 1] = '\0';
 }
