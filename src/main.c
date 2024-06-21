@@ -11,6 +11,7 @@
 #include <string.h>
 #include <time.h>
 #include <pthread.h>
+#include <sqlite3.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
@@ -35,6 +36,7 @@ typedef struct signature_log_args
 {
     char *f;
     char *t;
+    char *s;
     char *n;
 } signature_log_args;
 
@@ -294,18 +296,30 @@ void send_https_res(SSL *ssl, char *path, char *query)
     else if (strcmp(path, "/signature.gif") == 0)
     {
         pthread_t log_thread;
+        int is_logging = 0;
 
         // query can be ?f=somevalue&t=somevalue&n=somevalue
         if (query)
         {
-            signature_log_args args = {
-                .f = strtok(query, "&"),
-                .t = strtok(NULL, "&"),
-                .n = strtok(NULL, "&")
-            };
+            char *f = strtok(query, "&");
+            char *t = strtok(NULL, "&");
+            char *s = strtok(NULL, "&");
+            char *n = strtok(NULL, "&");
+
+            signature_log_args *args = malloc(sizeof(signature_log_args));
+            if (!args) {
+                perror("malloc");
+                exit(1);
+            }
+
+            args->f = f;
+            args->t = t;
+            args->s = s;
+            args->n = n;
 
             // log to signature.log
-            pthread_create(&log_thread, NULL, log_to_signature, (void *)&args);
+            pthread_create(&log_thread, NULL, log_to_signature, (void *)args);
+            is_logging = 1;
         }
 
         char *header = "HTTP/1.1 200 OK\r\nContent-Type: image/gif\r\n\r\n";
@@ -326,7 +340,7 @@ void send_https_res(SSL *ssl, char *path, char *query)
         }
 
         fclose(file);
-        if (query)
+        if (is_logging)
             pthread_join(log_thread, NULL);
     }
     else
@@ -341,29 +355,44 @@ void send_https_res(SSL *ssl, char *path, char *query)
 
 void *log_to_signature(void *l)
 {
+    sqlite3 *db;
+    char *err_msg = 0;
+   
+    int rc = sqlite3_open("server.db", &db);
     
-    FILE *log = fopen("files/signature.log", "a");
-    if (log == NULL)
-    {
-        perror("fopen");
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
+        sqlite3_close(db);
         exit(1);
     }
-
-    // f's value ;; t's value ;; n's value ;; date ;; time
+    
     char datestr[DATE_LEN], timestr[TIME_LEN];
     fill_date_and_time(datestr, timestr);
+    
+    char sql[512];
+    
+    sprintf(sql, "INSERT INTO signature(ip, from_email, to_email, subject, n_code, date, time) VALUES('%s', '%s', '%s', '%s', '%s', '%s', '%s')", 
+            "0", ((signature_log_args *)l)->f, ((signature_log_args *)l)->t, ((signature_log_args *)l)->s, ((signature_log_args *)l)->n, datestr, timestr);
+    rc = sqlite3_exec(db, sql, 0, 0, &err_msg);
 
-    fprintf(log, "%s ;; %s ;; %s ;; %s ;; %s\n", ((signature_log_args *)l)->f, ((signature_log_args *)l)->t, ((signature_log_args *)l)->n, datestr, timestr);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Failed to insert record: %s\n", err_msg);
+        sqlite3_free(err_msg);
+    }
 
-    fclose(log);
+    sqlite3_close(db);
+    
+    free(l);
+    
     return NULL;
 }
+
 
 void fill_date_and_time(char *datestr, char *timestr)
 {
     time_t t = time(NULL);
     struct tm *tm = localtime(&t);
-
+    
     strftime(datestr, DATE_LEN - 1, "%Y-%m-%d", tm);
     strftime(timestr, TIME_LEN - 1, "%H:%M:%S", tm);
     datestr[DATE_LEN - 1] = '\0';
