@@ -22,13 +22,33 @@ typedef struct Http_request {
     char query[MAX_QUERY_LEN];
 } Http_request;
 
+typedef struct email_args {
+    SSL *ssl;
+    const char *mydomain;
+    const char *from;
+    const char *auth_token;
+    const char *to;
+    const char *subject;
+    const char *body;
+} email_args;
+
+// Socket related functions
 int listener_socket(char *port, int backlog);
+int connected_socket(char *host, char *port);
+
+// HTTPS functions
+Http_request *get_request(SSL *ssl);
+void fill_query_param(char *query, char param, char *to_fill);
+
+// SMPTS functions
+void *secure_send_email(void *args);
+
+// SSL functions for HTTPS and SMTPS
 void secure_accept(SSL *ssl);
+void secure_connect(SSL *ssl);
 void secure_send(SSL *ssl, const char *data, size_t data_len);
 int secure_read(SSL *ssl, char *read_buff, size_t read_buff_len);
 void secure_close(SSL *ssl);
-Http_request *get_request(SSL *ssl);
-void fill_query_param(char *query, char param, char *to_fill);
 
 #endif
 

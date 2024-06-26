@@ -6,15 +6,15 @@
 // table member will specify the table in the database
 // log_to_db will access other members based on the table specified
 typedef struct db_args {
-    char *db_path;
-    char *table;
-    char *ip;
-    char *from;
-    char *to;
-    char *subject;
-    char *n_code;
-    char *date;
-    char *time;
+    const char *db_path;
+    const char *table;
+    const char *ip;
+    const char *from;
+    const char *to;
+    const char *subject;
+    const char *n_code;
+    const char *date;
+    const char *time;
 } db_args;
 
 // To allow for multithreaded approach

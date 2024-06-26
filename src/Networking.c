@@ -3,7 +3,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 
+#define MAX_IN_LEN 1024
+#define MAX_OUT_LEN 1024
+
+// Socket functions //
+
+// Listener socket (server)
 int listener_socket(char *port, int backlog) {
     int listener;
     struct addrinfo hints, *res, *p;
@@ -52,9 +59,63 @@ int listener_socket(char *port, int backlog) {
     return listener;
 }
 
+// Connected socket (client)
+int connected_socket(char *hostname, char *port) {
+    int sockfd;
+    struct addrinfo hints, *servinfo, *p;
+    int status;
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    // Get address information
+    if ((status = getaddrinfo(hostname, port, &hints, &servinfo)) != 0) {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
+        exit(EXIT_FAILURE);
+    }
+
+    // Loop through all the results and connect to the first we can
+    for (p = servinfo; p != NULL; p = p->ai_next) {
+        if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+            perror("socket");
+            continue;
+        }
+
+        if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+            close(sockfd);
+            perror("connect");
+            continue;
+        }
+
+        break;
+    }
+
+    if (p == NULL) {
+        fprintf(stderr, "Failed to connect\n");
+        exit(EXIT_FAILURE);
+    }
+
+    freeaddrinfo(servinfo);
+
+    return sockfd;
+}
+
+
+// SSL functions //
+
 // Accept the connection
 void secure_accept(SSL *ssl) {
     int status = SSL_accept(ssl);
+    if (status <= 0) {
+        ERR_print_errors_fp(stderr);
+        exit(1);
+    }
+}
+
+// Connect to server
+void secure_connect(SSL *ssl) {
+    int status = SSL_connect(ssl);
     if (status <= 0) {
         ERR_print_errors_fp(stderr);
         exit(1);
@@ -91,6 +152,9 @@ void secure_close(SSL *ssl) {
     SSL_shutdown(ssl);
     SSL_free(ssl);
 }
+
+
+// HTTPS functions //
 
 // Get the request from the client
 void parse_http_request(char *req_buff, char *method, char *file, char *query) {
@@ -171,5 +235,89 @@ void fill_query_param(char *query, char param, char *to_fill) {
     }
     // If param is not found, fill to_fill with an empty string
     *to_fill = '\0';
+}
+
+
+// SMTPS functions //
+
+// Create email
+void create_email ( char *out,
+                    int out_len,
+                    const char *from,
+                    const char *to,
+                    const char *subject,
+                    const char *body
+                    ) {
+    snprintf(out, 2048, 
+        "Content-Type: multipart/mixed; boundary=\"===============2463790331611798368==\"\r\n"
+        "MIME-Version: 1.0\r\n"
+        "From: %s\r\n"
+        "To: %s\r\n"
+        "Subject: %s\r\n\r\n"
+        "--===============2463790331611798368==\r\n"
+        "Content-Type: text/html; charset=\"us-ascii\"\r\n"
+        "MIME-Version: 1.0\r\n"
+        "Content-Transfer-Encoding: 7bit\r\n\r\n"
+        "%s"
+        "\r\n.\r\n",
+        from, to, subject, body);
+}
+
+// Send email
+void *secure_send_email(void *args) {
+    char in[MAX_IN_LEN], out[MAX_OUT_LEN];
+    email_args *emailargs = (email_args *)args;
+    SSL *ssl = emailargs->ssl;
+    const char  *mydomain = emailargs->mydomain,
+                *from = emailargs->from,
+                *auth_token = emailargs->auth_token,
+                *to = emailargs->to,
+                *subject = emailargs->subject,
+                *body = emailargs->body;
+
+    // Start SMTPS session
+    snprintf(out, MAX_OUT_LEN, "ehlo %s\r\n", mydomain);
+    secure_send(ssl, out, strlen(out));
+    sleep(1);   // Server sends multiple responses
+                // Wait for the server to send all the responses
+    secure_read(ssl, in, MAX_IN_LEN);
+    snprintf(out, MAX_OUT_LEN, "STARTTLS\r\n");
+    secure_send(ssl, out, strlen(out));
+    sleep(1);
+    secure_read(ssl, in, MAX_IN_LEN);
+
+    // Logging in
+    snprintf(out, MAX_OUT_LEN, "ehlo %s\r\n", mydomain);
+    secure_send(ssl, out, strlen(out));
+    sleep(1);
+    secure_read(ssl, in, MAX_IN_LEN);
+    snprintf(out, MAX_OUT_LEN, "AUTH PLAIN %s\r\n", auth_token);
+    secure_send(ssl, out, strlen(out));
+    sleep(1);
+    secure_read(ssl, in, MAX_IN_LEN);
+
+    // Send email
+    snprintf(out, MAX_OUT_LEN, "mail FROM:<%s>\r\n", from);
+    secure_send(ssl, out, strlen(out));
+    sleep(1);
+    secure_read(ssl, in, MAX_IN_LEN);
+    snprintf(out, MAX_OUT_LEN, "rcpt TO:<%s>\r\n", to);
+    secure_send(ssl, out, strlen(out));
+    sleep(1);
+    secure_read(ssl, in, MAX_IN_LEN);
+    secure_send(ssl, "data\r\n", 6);
+    sleep(1);
+    secure_read(ssl, in, MAX_IN_LEN);
+
+    // Send email
+    create_email(out, MAX_OUT_LEN, from, to, subject, body);
+    secure_send(ssl, out, strlen(out));
+    sleep(1);
+    secure_read(ssl, in, MAX_IN_LEN);
+
+    // End session
+    secure_send(ssl, "QUIT\r\n", 6);
+    
+    return NULL;
 }
 

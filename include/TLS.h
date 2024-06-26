@@ -5,9 +5,8 @@
 #include <openssl/err.h>
 #include <arpa/inet.h>
 
-SSL_CTX *ssl_context(const char *certificate_path, const char *key_path);
-
-void close_ssl(SSL *ssl);
+// SSL context
+SSL_CTX *ssl_context(const char *certificate_path, const char *key_path, char type);
 
 #endif
 

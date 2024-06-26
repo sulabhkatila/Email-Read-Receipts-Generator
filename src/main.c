@@ -11,16 +11,13 @@
 #include <pthread.h>
 #include <time.h>
 
+#define MYDOMAIN "emailapi.endpoints.isentropic-card-423523-k4.cloud.goog"
+
 #define TIMEZONE "UTC"
 #define PORT "443"
 #define BACKLOG 100
 
-#define CERTIFICATE_PATH "/home/sulabhkatila/cerver/assets/certificate.pem"
-#define KEY_PATH "/home/sulabhkatila/cerver/assets/privkey.pem"
-
-#define DATABASE_PATH "/home/sulabhkatila/cerver/server.db"
-#define SIGNATURE_RECEIPTS_TABLE "signature_receipts"
-
+#define MAX_LINE_LEN 100
 #define MAX_FILE_BUFF_LEN 2048
 #define MAX_DATE_LEN 20
 #define MAX_TIME_LEN 20
@@ -28,13 +25,41 @@
 #define MAX_SUBJECT_LEN 100
 #define MAX_N_CODE_LEN 10
 
-void handle_zombie_process();
+#define SMTP_SERVER "smtp.gmail.com"
+#define SMTP_PORT "465"
+
+#define EMAIL_SUBJECT "Signature Receipt"
+#define EMAIL_BODY_LEN 512
+
+
+void handle_zombie_process(struct sigaction *sa);
+void load_env_variables();
 void setup_timezone(char *timezone);
 void fill_date_and_time(char *datestr, char *timestr);
 
-int main() {
+int main(int argc, char *argv[]) {
+    // Deal with zombie processes
     struct sigaction *sa;
     handle_zombie_process(sa);
+
+    // Get the environment variables
+    load_env_variables();
+    const char *EMAIL = getenv("EMAIL");
+    const char *AUTH_TOKEN = getenv("AUTH_TOKEN");
+    const char *CERTIFICATE_PATH = getenv("CERTIFICATE_PATH");
+    const char *KEY_PATH = getenv("KEY_PATH");
+    const char *DATABASE_PATH = getenv("DATABASE_PATH");
+    const char *SIGNATURE_RECEIPTS_TABLE = getenv("SIGNATURE_RECEIPTS_TABLE");
+    if (EMAIL == NULL ||
+        AUTH_TOKEN == NULL ||
+        CERTIFICATE_PATH == NULL ||
+        KEY_PATH == NULL ||
+        DATABASE_PATH == NULL ||
+        SIGNATURE_RECEIPTS_TABLE == NULL
+        ) {
+        fprintf(stderr, "Environment variables not set\n");
+        exit(1);
+    }
 
     // Set timezone to, later, log to database
     setup_timezone(TIMEZONE);
@@ -45,7 +70,7 @@ int main() {
     char cl_addr4[INET_ADDRSTRLEN];
     socklen_t cl_sin_size;
 
-    SSL_CTX *ctx = ssl_context(CERTIFICATE_PATH, KEY_PATH);
+    SSL_CTX *ctx = ssl_context(CERTIFICATE_PATH, KEY_PATH, 's');  // Server SSL context
     SSL *ssl;
 
     printf("\nserver: listening at port %s\n", PORT);
@@ -75,8 +100,8 @@ int main() {
             Http_request *request = get_request(ssl); 
 
             // Send response
-            pthread_t log_t;
-            int is_logging = 0;
+            pthread_t log_t, email_t;
+            int is_logging = 0, is_emailing = 0;
             if (strcmp(request->file, "/") == 0) {
                 char *header = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
                 char *body = "<h1>Hello, I am <a href=\"https://sulabhkatila.github.io/\">Sulabh Katila</a>!</h1>";
@@ -109,6 +134,35 @@ int main() {
                 pthread_create(&log_t, NULL, log_to_db, (void *)&sr_args);
                 is_logging = 1;
 
+                // Start a SMTPS client and send the email
+                int connected = connected_socket(SMTP_SERVER, SMTP_PORT);   // Connect to SMTP server
+                // SSL/TLS connection
+                SSL *smtp_ssl = SSL_new(ssl_context(CERTIFICATE_PATH, KEY_PATH, 0));  // Client SSL context
+                SSL_set_fd(smtp_ssl, connected);
+                secure_connect(smtp_ssl);
+
+                // Create the message and send the email
+                char body[EMAIL_BODY_LEN];
+                snprintf(   body,
+                            EMAIL_BODY_LEN,  
+                            "<p>Hello, %s!</p>"
+                            "<p>Your signature has been received by %s (Subject: %s) on %s at %s (%s).</br></p>"
+                            "<p>N-Code: %s</p><p></p><p>Thank you!</p>",
+                            from, to, subject, datestr, timestr, TIMEZONE, n_code
+                        );
+                email_args ea = {
+                    smtp_ssl,
+                    MYDOMAIN,
+                    EMAIL,
+                    AUTH_TOKEN,
+                    from,
+                    EMAIL_SUBJECT,
+                    body,
+                };
+                pthread_create(&email_t, NULL, secure_send_email, (void *)&ea);
+                is_emailing = 1;
+
+                // Send the response
                 char *header = "HTTP/1.1 200 OK\r\nContent-Type: image/gif\r\n\r\n";
                 secure_send(ssl, header, strlen(header));
                 
@@ -123,8 +177,13 @@ int main() {
                 while ((bytes_read = fread(f_buff, 1, sizeof(f_buff), f)) > 0) {
                     secure_send(ssl, f_buff, bytes_read);
                 }
-
+                
                 fclose(f);
+                if (is_emailing) {
+                    pthread_join(email_t, NULL);
+                    secure_close(smtp_ssl);
+                    close(connected);
+                }
             } else {
                 // 404 Not Found
                 char *header = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\n\r\n";
@@ -135,6 +194,7 @@ int main() {
             }
             free(request);
 
+            // The End
             secure_close(ssl);
             close(newfd);
             printf("server: connection closed with %s\n", cl_addr4);
@@ -170,6 +230,25 @@ void handle_zombie_process(struct sigaction *sa) {
 }
 
 
+// Environment variables
+void load_env_variables() {
+    FILE *env_file = fopen(".env", "r");
+    if (env_file == NULL) {
+        return;     // No .env file
+                    // Use the environment variables set in the shell
+    }
+
+    char line[MAX_LINE_LEN];
+    while (fgets(line, sizeof(line), env_file)) {
+        char *name = strtok(line, "=");
+        char *value = strtok(NULL, "\n");
+        setenv(name, value, 1);
+    }
+
+    fclose(env_file);
+}
+
+
 // Date and Time handling
 void setup_timezone(char *timezone) {
     setenv("TZ", timezone, 1);
@@ -185,4 +264,3 @@ void fill_date_and_time(char *datestr, char *timestr) {
     datestr[MAX_DATE_LEN - 1] = '\0';
     timestr[MAX_TIME_LEN - 1] = '\0';
 }
-

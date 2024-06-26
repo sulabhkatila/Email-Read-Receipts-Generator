@@ -9,6 +9,9 @@
 #define MAX_SQL_QUERY_LEN 512
 #define SIGNATURE_RECEIPT_TABLE "signature_receipts"
 
+// Database functions //
+
+// Log to database
 void *log_to_db(void *args) {
     db_args *dbargs = (db_args *)args;
     sqlite3 *db;
