@@ -1,0 +1,30 @@
+{
+    "manifest_version": 3,
+    "name": "Email Read Receipts Extension",
+    "description": "Extension for email read receipts",
+    "version": "1.0",
+    "action": {
+        "default_popup": "popup.html",
+        "default_icon": "assets/default_icon.png"
+    },
+    "permissions": [
+        "storage",
+        "activeTab",
+        "scripting"
+    ],
+    "content_scripts" : [
+        {
+            "js": [
+                "./scripts/content.js"
+            ],
+            "css": [
+                "./styles/content.css"
+            ],
+            "matches": [
+                "http://mail.google.com/mail/*",
+                "https://mail.google.com/mail/*"
+            ]
+        }
+     ]
+}
+
