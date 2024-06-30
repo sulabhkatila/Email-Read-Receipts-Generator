@@ -1,3 +1,4 @@
-main
-obj
-logfiles
+src/main
+src/obj
+src/logfiles
+
