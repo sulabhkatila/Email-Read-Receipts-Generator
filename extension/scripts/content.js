@@ -1,3 +1,5 @@
+const endpoint = "https://emailapi.endpoints.isentropic-card-423523-k4.cloud.goog";
+
 // Switch element //
 let switch_checkbox = document.createElement("input");
 switch_checkbox.setAttribute("type", "checkbox");
@@ -28,7 +30,7 @@ switch_checkbox.addEventListener("change", () => {
 
             tracker.setAttribute(
             "src",
-            `https://emailapi.endpoints.isentropic-card-423523-k4.cloud.goog/signature.gif?f=${from}&t=${to}&s=${subject}&n=1`
+            `${endpoint}/signature.gif?f=${from}&t=${to}&s=${subject}&n=1`
             );
             tracker.setAttribute("alt", "");
             tracker.setAttribute("width", "0");
