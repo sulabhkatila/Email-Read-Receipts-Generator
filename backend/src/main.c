@@ -28,7 +28,7 @@
 #define SMTP_SERVER "smtp.gmail.com"
 #define SMTP_PORT "465"
 
-#define EMAIL_SUBJECT "Signature Receipt"
+#define EMAIL_SUBJECT "Email Read Receipt"
 #define EMAIL_BODY_LEN 512
 
 
@@ -147,8 +147,8 @@ int main(int argc, char *argv[]) {
                             EMAIL_BODY_LEN,  
                             "<p>Hello, %s!</p>"
                             "<p>Your signature has been received by %s (Subject: %s) on %s at %s (%s).</br></p>"
-                            "<p>N-Code: %s</p><p></p><p>Thank you!</p>",
-                            from, to, subject, datestr, timestr, TIMEZONE, n_code
+                            "<p></p><p></p><p>Thank you!</p>",
+                            from, to, subject, datestr, timestr, TIMEZONE
                         );
                 email_args ea = {
                     smtp_ssl,
