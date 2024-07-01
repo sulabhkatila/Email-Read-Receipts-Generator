@@ -17,6 +17,8 @@
 #define PORT "443"
 #define BACKLOG 100
 
+#define GOOGLE_PROXY "74.125"
+
 #define MAX_LINE_LEN 100
 #define MAX_FILE_BUFF_LEN 2048
 #define MAX_DATE_LEN 20
@@ -39,8 +41,8 @@ void fill_date_and_time(char *datestr, char *timestr);
 
 int main(int argc, char *argv[]) {
     // Deal with zombie processes
-    struct sigaction *sa;
-    handle_zombie_process(sa);
+    struct sigaction sa;
+    handle_zombie_process(&sa);
 
     // Get the environment variables
     load_env_variables();
@@ -87,6 +89,12 @@ int main(int argc, char *argv[]) {
 
         inet_ntop(cl_addr.ss_family, &((struct sockaddr_in *)&cl_addr)->sin_addr, cl_addr4, sizeof cl_addr4);
         printf("server: got connection from %s\n", cl_addr4);
+
+        if (strncmp(cl_addr4, GOOGLE_PROXY, strlen(GOOGLE_PROXY)) != 0) {
+            printf("server: connection closed with %s (not one of GOOGLE's proxy)\n", cl_addr4);
+            close(newfd);
+            continue;
+        }
 
         // Get a child process handle the connection
         // Have the parent process accepting new connections
