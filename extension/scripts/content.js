@@ -1,50 +1,57 @@
-const endpoint = "https://emailapi.endpoints.isentropic-card-423523-k4.cloud.goog";
+const endpoint =
+  "https://emailapi.endpoints.isentropic-card-423523-k4.cloud.goog";
 
 // Switch element //
 let switch_checkbox = document.createElement("input");
 switch_checkbox.setAttribute("type", "checkbox");
 
 switch_checkbox.addEventListener("change", () => {
-    const compose_body = document.querySelector(
-        ".Am.aiL.Al.editable.LW-avf.tS-tW"
-    );
-    const send_button_div = document.querySelector(".J-J5-Ji.btA");
-    if (switch_checkbox.checked) {
-        send_button_div.addEventListener(
-        "click",
-        (event) => {
-            const tracker = document.createElement("img");
-            const subject = document.querySelector("input[name='subjectbox']").value;
-            const from_arialabel = document.querySelector(".gb_d.gb_Ja.gb_K").getAttribute('aria-label');
-            const from = from_arialabel.match(/\(([^)]+)\)/)[1];
-            const to_divs = document.querySelectorAll(".oL.aDm.az9");
-            let to = "";
-            to_divs.forEach((div, index) => {
-                let email = div.querySelector("span").getAttribute("email");
-                if (to !== "") {
-                    to += `;${email}`;
-                } else {
-                    to += email;
-                }
-            })
+  const compose_body = document.querySelector(
+    ".Am.aiL.Al.editable.LW-avf.tS-tW"
+  );
 
-            tracker.setAttribute(
-            "src",
-            `${endpoint}/signature.gif?f=${from}&t=${to}&s=${subject}&n=1`
-            );
-            tracker.setAttribute("alt", "");
-            tracker.setAttribute("width", "0");
-            tracker.setAttribute("height", "0");
-            tracker.style.overflow = "hidden";
+  const send_button_div = document.querySelector(".J-J5-Ji.btA");
+  if (switch_checkbox.checked) {
+    send_button_div.addEventListener(
+      "click",
+      (event) => {
+        const tracker = document.createElement("img");
+        const subject = document.querySelector(
+          "input[name='subjectbox']"
+        ).value;
 
-            compose_body.appendChild(tracker);
+        const from_arialabel = document
+          .querySelector(".gb_d.gb_ya.gb_z")
+          .getAttribute("aria-label");
+        const from = from_arialabel.match(/\(([^)]+)\)/)[1];
+        const to_divs = document.querySelectorAll(".oL.aDm.az9");
+        let to = "";
+        to_divs.forEach((div, index) => {
+          let email = div.querySelector("span").getAttribute("email");
+          if (to !== "") {
+            to += `;${email}`;
+          } else {
+            to += email;
+          }
+        });
 
-            console.log("added");
-        },
-        true
+        tracker.setAttribute(
+          "src",
+          `${endpoint}/signature.gif?f=${from}&t=${to}&s=${subject}&n=1`
         );
-    } else {
-    }
+        tracker.setAttribute("alt", "");
+        tracker.setAttribute("width", "0");
+        tracker.setAttribute("height", "0");
+        tracker.style.overflow = "hidden";
+
+        compose_body.appendChild(tracker);
+
+        console.log("tracker added");
+      },
+      true
+    );
+  } else {
+  }
 });
 
 let switch_slider = document.createElement("span");
@@ -58,13 +65,12 @@ switch_element.classList.add("switch");
 switch_element.appendChild(switch_checkbox);
 switch_element.appendChild(switch_slider);
 
-
 // Monitor the window for compose box //
 const body_observer = new MutationObserver((mutations) => {
-    let compose_footer = document.getElementsByClassName("btC")[0];
-    if (compose_footer && !document.getElementById("switch_element_id")) {
-        compose_footer.insertBefore(switch_element, compose_footer.children[1]);
-    }
+  let compose_footer = document.getElementsByClassName("btC")[0];
+  if (compose_footer && !document.getElementById("switch_element_id")) {
+    compose_footer.insertBefore(switch_element, compose_footer.children[1]);
+  }
 });
 
 body_observer.observe(document.body, { childList: true, subtree: true });
