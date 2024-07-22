@@ -39,6 +39,7 @@ int connected_socket(char *host, char *port);
 // HTTPS functions
 Http_request *get_request(SSL *ssl);
 void fill_query_param(char *query, char param, char *to_fill);
+void redirect(SSL *ssl, char *redirect_to);
 
 // SMPTS functions
 void *secure_send_email(void *args);

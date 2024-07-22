@@ -90,12 +90,6 @@ int main(int argc, char *argv[]) {
         inet_ntop(cl_addr.ss_family, &((struct sockaddr_in *)&cl_addr)->sin_addr, cl_addr4, sizeof cl_addr4);
         printf("server: got connection from %s\n", cl_addr4);
 
-        if (strncmp(cl_addr4, GOOGLE_PROXY, strlen(GOOGLE_PROXY)) != 0) {
-            printf("server: connection closed with %s (not one of GOOGLE's proxy)\n", cl_addr4);
-            close(newfd);
-            continue;
-        }
-
         // Get a child process handle the connection
         // Have the parent process accepting new connections
         if (!fork()) {
@@ -117,80 +111,88 @@ int main(int argc, char *argv[]) {
                 secure_send(ssl, header, strlen(header));
                 secure_send(ssl, body, strlen(body));
             } else if (strcmp(request->file, "/signature.gif") == 0) {
-                // Log the receipt of request to signature_receipts
-                char datestr[MAX_DATE_LEN], timestr[MAX_TIME_LEN];
-                fill_date_and_time(datestr, timestr);
+                // Redirect if it was not from Google proxy
+                if (strncmp(cl_addr4, GOOGLE_PROXY, strlen(GOOGLE_PROXY)) != 0) {
+                    char home_url[100];
+                    snprintf(home_url, sizeof(home_url), "https://%s/", MYDOMAIN);
+                    redirect(ssl, home_url);    
+                } else {
 
-                char from[MAX_EMAIL_LEN], to[MAX_EMAIL_LEN], subject[MAX_SUBJECT_LEN], n_code[MAX_N_CODE_LEN];
-                fill_query_param(request->query, 'f', from);
-                fill_query_param(request->query, 't', to);
-                fill_query_param(request->query, 's', subject);
-                fill_query_param(request->query, 'n', n_code);
+                    // Log the receipt of request to signature_receipts
+                    char datestr[MAX_DATE_LEN], timestr[MAX_TIME_LEN];
+                    fill_date_and_time(datestr, timestr);
 
-                db_args sr_args = {
-                    DATABASE_PATH,
-                    SIGNATURE_RECEIPTS_TABLE,
-                    cl_addr4,
-                    from,
-                    to,
-                    subject,
-                    n_code,
-                    datestr,
-                    timestr,
-                };
+                    char from[MAX_EMAIL_LEN], to[MAX_EMAIL_LEN], subject[MAX_SUBJECT_LEN], n_code[MAX_N_CODE_LEN];
+                    fill_query_param(request->query, 'f', from);
+                    fill_query_param(request->query, 't', to);
+                    fill_query_param(request->query, 's', subject);
+                    fill_query_param(request->query, 'n', n_code);
 
-                pthread_create(&log_t, NULL, log_to_db, (void *)&sr_args);
-                is_logging = 1;
+                    db_args sr_args = {
+                        DATABASE_PATH,
+                        SIGNATURE_RECEIPTS_TABLE,
+                        cl_addr4,
+                        from,
+                        to,
+                        subject,
+                        n_code,
+                        datestr,
+                        timestr,
+                    };
 
-                // Start a SMTPS client and send the email
-                int connected = connected_socket(SMTP_SERVER, SMTP_PORT);   // Connect to SMTP server
-                // SSL/TLS connection
-                SSL *smtp_ssl = SSL_new(ssl_context(CERTIFICATE_PATH, KEY_PATH, 0));  // Client SSL context
-                SSL_set_fd(smtp_ssl, connected);
-                secure_connect(smtp_ssl);
+                    pthread_create(&log_t, NULL, log_to_db, (void *)&sr_args);
+                    is_logging = 1;
 
-                // Create the message and send the email
-                char body[EMAIL_BODY_LEN];
-                snprintf(   body,
-                            EMAIL_BODY_LEN,  
-                            "<p>Hello, %s!</p>"
-                            "<p>Your signature has been received by %s (Subject: %s) on %s at %s (%s).</br></p>"
-                            "<p></p><p></p><p>Thank you!</p>",
-                            from, to, subject, datestr, timestr, TIMEZONE
-                        );
-                email_args ea = {
-                    smtp_ssl,
-                    MYDOMAIN,
-                    EMAIL,
-                    AUTH_TOKEN,
-                    from,
-                    EMAIL_SUBJECT,
-                    body,
-                };
-                pthread_create(&email_t, NULL, secure_send_email, (void *)&ea);
-                is_emailing = 1;
+                    // Start a SMTPS client and send the email
+                    int connected = connected_socket(SMTP_SERVER, SMTP_PORT);   // Connect to SMTP server
+                    // SSL/TLS connection
+                    SSL *smtp_ssl = SSL_new(ssl_context(CERTIFICATE_PATH, KEY_PATH, 0));  // Client SSL context
+                    SSL_set_fd(smtp_ssl, connected);
+                    secure_connect(smtp_ssl);
 
-                // Send the response
-                char *header = "HTTP/1.1 200 OK\r\nContent-Type: image/gif\r\n\r\n";
-                secure_send(ssl, header, strlen(header));
-                
-                FILE *f = fopen("/home/sulabhkatila/cerver/files/signature.gif", "r");
-                if (f == NULL) {
-                    perror("fopen");
-                    exit(1);
-                }
-                
-                char f_buff[MAX_FILE_BUFF_LEN];
-                int bytes_read;
-                while ((bytes_read = fread(f_buff, 1, sizeof(f_buff), f)) > 0) {
-                    secure_send(ssl, f_buff, bytes_read);
-                }
-                
-                fclose(f);
-                if (is_emailing) {
-                    pthread_join(email_t, NULL);
-                    secure_close(smtp_ssl);
-                    close(connected);
+                    // Create the message and send the email
+                    char body[EMAIL_BODY_LEN];
+                    snprintf(   body,
+                                EMAIL_BODY_LEN,  
+                                "<p>Hello, %s!</p>"
+                                "<p>Your signature has been received by %s (Subject: %s) on %s at %s (%s).</br></p>"
+                                "<p></p><p></p><p>Thank you!</p>",
+                                from, to, subject, datestr, timestr, TIMEZONE
+                            );
+                    email_args ea = {
+                        smtp_ssl,
+                        MYDOMAIN,
+                        EMAIL,
+                        AUTH_TOKEN,
+                        from,
+                        EMAIL_SUBJECT,
+                        body,
+                    };
+                    pthread_create(&email_t, NULL, secure_send_email, (void *)&ea);
+                    is_emailing = 1;
+
+                    // Send the response
+                    char *header = "HTTP/1.1 200 OK\r\nContent-Type: image/gif\r\n\r\n";
+                    secure_send(ssl, header, strlen(header));
+                    
+                    FILE *f = fopen("/home/sulabhkatila/cerver/files/signature.gif", "r");
+                    if (f == NULL) {
+                        perror("fopen");
+                        exit(1);
+                    }
+                    
+                    char f_buff[MAX_FILE_BUFF_LEN];
+                    int bytes_read;
+                    while ((bytes_read = fread(f_buff, 1, sizeof(f_buff), f)) > 0) {
+                        secure_send(ssl, f_buff, bytes_read);
+                    }
+                    
+                    fclose(f);
+                    if (is_emailing) {
+                        pthread_join(email_t, NULL);
+                        secure_close(smtp_ssl);
+                        close(connected);
+                    }
                 }
             } else {
                 // 404 Not Found

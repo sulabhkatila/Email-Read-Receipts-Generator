@@ -237,6 +237,18 @@ void fill_query_param(char *query, char param, char *to_fill) {
     *to_fill = '\0';
 }
 
+// Redirect to another route
+void redirect(SSL *ssl, char *redirect_to) {
+    char response[256];
+    int response_len = snprintf(response, sizeof(response),
+            "HTTP/1.1 302 Found\r\n"
+             "Location: %s\r\n"
+             "Content-Length: 0\r\n"
+             "Connection: close\r\n"
+             "\r\n", redirect_to);
+    secure_send(ssl, response, response_len);
+}
+
 
 // SMTPS functions //
 
