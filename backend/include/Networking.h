@@ -1,13 +1,13 @@
 #ifndef _NETWORKING_H_
 #define _NETWORKING_H_
 
+#include <netdb.h>
+#include <openssl/err.h>
+#include <openssl/ssl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <netdb.h>
-#include <unistd.h> 
-#include <openssl/ssl.h>
-#include <openssl/err.h>
+#include <unistd.h>
 
 #define MAX_METHOD_LEN 7
 #define MAX_FILEPATH_LEN 15
@@ -52,4 +52,3 @@ int secure_read(SSL *ssl, char *read_buff, size_t read_buff_len);
 void secure_close(SSL *ssl);
 
 #endif
-

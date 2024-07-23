@@ -18,7 +18,7 @@ typedef struct db_args {
 } db_args;
 
 // To allow for multithreaded approach
-void *log_to_db(void *args);    // *args need to be able to be type casted to *db_args 
+void *log_to_db(
+    void *args);  // *args need to be able to be type casted to *db_args
 
 #endif
-

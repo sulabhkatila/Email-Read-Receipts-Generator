@@ -1,15 +1,15 @@
-#include "Networking.h" 
-#include "TLS.h"
-#include "DB.h"
-
+#include <errno.h>
+#include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <signal.h>
-#include <unistd.h>
-#include <errno.h>
-#include <pthread.h>
 #include <time.h>
+#include <unistd.h>
+
+#include "DB.h"
+#include "Networking.h"
+#include "TLS.h"
 
 #define MYDOMAIN "emailapi.endpoints.isentropic-card-423523-k4.cloud.goog"
 
@@ -33,7 +33,6 @@
 #define EMAIL_SUBJECT "Email Read Receipt"
 #define EMAIL_BODY_LEN 512
 
-
 void handle_zombie_process(struct sigaction *sa);
 void load_env_variables();
 void setup_timezone(char *timezone);
@@ -52,13 +51,9 @@ int main(int argc, char *argv[]) {
     const char *KEY_PATH = getenv("KEY_PATH");
     const char *DATABASE_PATH = getenv("DATABASE_PATH");
     const char *SIGNATURE_RECEIPTS_TABLE = getenv("SIGNATURE_RECEIPTS_TABLE");
-    if (EMAIL == NULL ||
-        AUTH_TOKEN == NULL ||
-        CERTIFICATE_PATH == NULL ||
-        KEY_PATH == NULL ||
-        DATABASE_PATH == NULL ||
-        SIGNATURE_RECEIPTS_TABLE == NULL
-        ) {
+    if (EMAIL == NULL || AUTH_TOKEN == NULL || CERTIFICATE_PATH == NULL ||
+        KEY_PATH == NULL || DATABASE_PATH == NULL ||
+        SIGNATURE_RECEIPTS_TABLE == NULL) {
         fprintf(stderr, "Environment variables not set\n");
         exit(1);
     }
@@ -72,7 +67,8 @@ int main(int argc, char *argv[]) {
     char cl_addr4[INET_ADDRSTRLEN];
     socklen_t cl_sin_size;
 
-    SSL_CTX *ctx = ssl_context(CERTIFICATE_PATH, KEY_PATH, 's');  // Server SSL context
+    SSL_CTX *ctx =
+        ssl_context(CERTIFICATE_PATH, KEY_PATH, 's');  // Server SSL context
     SSL *ssl;
 
     printf("\nserver: listening at port %s\n", PORT);
@@ -87,7 +83,9 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
-        inet_ntop(cl_addr.ss_family, &((struct sockaddr_in *)&cl_addr)->sin_addr, cl_addr4, sizeof cl_addr4);
+        inet_ntop(cl_addr.ss_family,
+                  &((struct sockaddr_in *)&cl_addr)->sin_addr, cl_addr4,
+                  sizeof cl_addr4);
         printf("server: got connection from %s\n", cl_addr4);
 
         // Get a child process handle the connection
@@ -99,30 +97,36 @@ int main(int argc, char *argv[]) {
             SSL_set_fd(ssl, newfd);
             secure_accept(ssl);
 
-            Http_request *request = get_request(ssl); 
+            Http_request *request = get_request(ssl);
 
             // Send response
             pthread_t log_t, email_t;
             int is_logging = 0, is_emailing = 0;
             if (strcmp(request->file, "/") == 0) {
-                char *header = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
-                char *body = "<h1>Hello, I am <a href=\"https://sulabhkatila.github.io/\">Sulabh Katila</a>!</h1>";
+                char *header =
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
+                char *body =
+                    "<h1>Hello, I am <a "
+                    "href=\"https://sulabhkatila.github.io/\">Sulabh "
+                    "Katila</a>!</h1>";
 
                 secure_send(ssl, header, strlen(header));
                 secure_send(ssl, body, strlen(body));
             } else if (strcmp(request->file, "/signature.gif") == 0) {
                 // Redirect if it was not from Google proxy
-                if (strncmp(cl_addr4, GOOGLE_PROXY, strlen(GOOGLE_PROXY)) != 0) {
+                if (strncmp(cl_addr4, GOOGLE_PROXY, strlen(GOOGLE_PROXY)) !=
+                    0) {
                     char home_url[100];
-                    snprintf(home_url, sizeof(home_url), "https://%s/", MYDOMAIN);
-                    redirect(ssl, home_url);    
+                    snprintf(home_url, sizeof(home_url), "https://%s/",
+                             MYDOMAIN);
+                    redirect(ssl, home_url);
                 } else {
-
                     // Log the receipt of request to signature_receipts
                     char datestr[MAX_DATE_LEN], timestr[MAX_TIME_LEN];
                     fill_date_and_time(datestr, timestr);
 
-                    char from[MAX_EMAIL_LEN], to[MAX_EMAIL_LEN], subject[MAX_SUBJECT_LEN], n_code[MAX_N_CODE_LEN];
+                    char from[MAX_EMAIL_LEN], to[MAX_EMAIL_LEN],
+                        subject[MAX_SUBJECT_LEN], n_code[MAX_N_CODE_LEN];
                     fill_query_param(request->query, 'f', from);
                     fill_query_param(request->query, 't', to);
                     fill_query_param(request->query, 's', subject);
@@ -144,49 +148,49 @@ int main(int argc, char *argv[]) {
                     is_logging = 1;
 
                     // Start a SMTPS client and send the email
-                    int connected = connected_socket(SMTP_SERVER, SMTP_PORT);   // Connect to SMTP server
+                    int connected = connected_socket(
+                        SMTP_SERVER, SMTP_PORT);  // Connect to SMTP server
                     // SSL/TLS connection
-                    SSL *smtp_ssl = SSL_new(ssl_context(CERTIFICATE_PATH, KEY_PATH, 0));  // Client SSL context
+                    SSL *smtp_ssl = SSL_new(ssl_context(
+                        CERTIFICATE_PATH, KEY_PATH, 0));  // Client SSL context
                     SSL_set_fd(smtp_ssl, connected);
                     secure_connect(smtp_ssl);
 
                     // Create the message and send the email
                     char body[EMAIL_BODY_LEN];
-                    snprintf(   body,
-                                EMAIL_BODY_LEN,  
-                                "<p>Hello, %s!</p>"
-                                "<p>Your signature has been received by %s (Subject: %s) on %s at %s (%s).</br></p>"
-                                "<p></p><p></p><p>Thank you!</p>",
-                                from, to, subject, datestr, timestr, TIMEZONE
-                            );
+                    snprintf(body, EMAIL_BODY_LEN,
+                             "<p>Hello, %s!</p>"
+                             "<p>Your signature has been received by %s "
+                             "(Subject: %s) on %s at %s (%s).</br></p>"
+                             "<p></p><p></p><p>Thank you!</p>",
+                             from, to, subject, datestr, timestr, TIMEZONE);
                     email_args ea = {
-                        smtp_ssl,
-                        MYDOMAIN,
-                        EMAIL,
-                        AUTH_TOKEN,
-                        from,
-                        EMAIL_SUBJECT,
-                        body,
+                        smtp_ssl, MYDOMAIN,      EMAIL, AUTH_TOKEN,
+                        from,     EMAIL_SUBJECT, body,
                     };
-                    pthread_create(&email_t, NULL, secure_send_email, (void *)&ea);
+                    pthread_create(&email_t, NULL, secure_send_email,
+                                   (void *)&ea);
                     is_emailing = 1;
 
                     // Send the response
-                    char *header = "HTTP/1.1 200 OK\r\nContent-Type: image/gif\r\n\r\n";
+                    char *header =
+                        "HTTP/1.1 200 OK\r\nContent-Type: image/gif\r\n\r\n";
                     secure_send(ssl, header, strlen(header));
-                    
-                    FILE *f = fopen("/home/sulabhkatila/cerver/files/signature.gif", "r");
+
+                    FILE *f = fopen(
+                        "/home/sulabhkatila/cerver/files/signature.gif", "r");
                     if (f == NULL) {
                         perror("fopen");
                         exit(1);
                     }
-                    
+
                     char f_buff[MAX_FILE_BUFF_LEN];
                     int bytes_read;
-                    while ((bytes_read = fread(f_buff, 1, sizeof(f_buff), f)) > 0) {
+                    while ((bytes_read = fread(f_buff, 1, sizeof(f_buff), f)) >
+                           0) {
                         secure_send(ssl, f_buff, bytes_read);
                     }
-                    
+
                     fclose(f);
                     if (is_emailing) {
                         pthread_join(email_t, NULL);
@@ -196,7 +200,8 @@ int main(int argc, char *argv[]) {
                 }
             } else {
                 // 404 Not Found
-                char *header = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\n\r\n";
+                char *header =
+                    "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\n\r\n";
                 char *body = "<h1>404 Not Found</h1>";
 
                 secure_send(ssl, header, strlen(header));
@@ -218,14 +223,12 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-
 // Signal handing for Zombie processes
 void handle_sigchld(int sig) {
     // waitpid() might change errno
     // so we save it and restore it later
     int saved_errno = errno;
-    while (waitpid(-1, NULL, WNOHANG) > 0)
-        ;
+    while (waitpid(-1, NULL, WNOHANG) > 0);
     errno = saved_errno;
 }
 
@@ -239,13 +242,12 @@ void handle_zombie_process(struct sigaction *sa) {
     }
 }
 
-
 // Environment variables
 void load_env_variables() {
     FILE *env_file = fopen(".env", "r");
     if (env_file == NULL) {
-        return;     // No .env file
-                    // Use the environment variables set in the shell
+        return;  // No .env file
+                 // Use the environment variables set in the shell
     }
 
     char line[MAX_LINE_LEN];
@@ -257,7 +259,6 @@ void load_env_variables() {
 
     fclose(env_file);
 }
-
 
 // Date and Time handling
 void setup_timezone(char *timezone) {

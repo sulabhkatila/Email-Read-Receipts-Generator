@@ -1,8 +1,8 @@
 #include "Networking.h"
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #define MAX_IN_LEN 1024
@@ -29,7 +29,8 @@ int listener_socket(char *port, int backlog) {
 
     // Bind to the first available address
     for (p = res; p != NULL; p = p->ai_next) {
-        if ((listener = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {   
+        if ((listener = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) ==
+            -1) {
             // AF_INET and PF_INET are basically the same thing
             perror("server: socket");
             continue;
@@ -77,7 +78,8 @@ int connected_socket(char *hostname, char *port) {
 
     // Loop through all the results and connect to the first we can
     for (p = servinfo; p != NULL; p = p->ai_next) {
-        if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+        if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) ==
+            -1) {
             perror("socket");
             continue;
         }
@@ -100,7 +102,6 @@ int connected_socket(char *hostname, char *port) {
 
     return sockfd;
 }
-
 
 // SSL functions //
 
@@ -139,7 +140,7 @@ void secure_send(SSL *ssl, const char *data, size_t data_len) {
 
 // Read encrypted response
 int secure_read(SSL *ssl, char *buff, size_t buff_len) {
-    int bytes_read =  SSL_read(ssl, buff, buff_len);
+    int bytes_read = SSL_read(ssl, buff, buff_len);
     if (bytes_read < 0) {
         ERR_print_errors_fp(stderr);
         exit(1);
@@ -152,7 +153,6 @@ void secure_close(SSL *ssl) {
     SSL_shutdown(ssl);
     SSL_free(ssl);
 }
-
 
 // HTTPS functions //
 
@@ -195,18 +195,20 @@ Http_request *get_request(SSL *ssl) {
     char req_buff[MAX_REQUEST_LEN];
     int bytes_recv = 0, total_bytes_recv = 0;
 
-    while ((bytes_recv = secure_read(ssl, req_buff + total_bytes_recv, MAX_REQUEST_LEN - total_bytes_recv - 1)) > 0)
-    {
+    while ((bytes_recv = secure_read(ssl, req_buff + total_bytes_recv,
+                                     MAX_REQUEST_LEN - total_bytes_recv - 1)) >
+           0) {
         total_bytes_recv += bytes_recv;
 
         // Break if received complete message or Filled the req_buff
-        if (req_buff[total_bytes_recv - 1] == '\n' || total_bytes_recv == MAX_REQUEST_LEN - 1)
+        if (req_buff[total_bytes_recv - 1] == '\n' ||
+            total_bytes_recv == MAX_REQUEST_LEN - 1)
             break;
     }
 
-    if (total_bytes_recv <= 0)
-    {
-        fprintf(stderr, "SSL_read failed with error %d\n", SSL_get_error(ssl, bytes_recv));
+    if (total_bytes_recv <= 0) {
+        fprintf(stderr, "SSL_read failed with error %d\n",
+                SSL_get_error(ssl, bytes_recv));
         ERR_print_errors_fp(stderr);
         exit(1);
     }
@@ -214,17 +216,18 @@ Http_request *get_request(SSL *ssl) {
     req_buff[total_bytes_recv] = '\0';
 
     // Parse the request
-    parse_http_request(req_buff, request->method, request->file, request->query);
+    parse_http_request(req_buff, request->method, request->file,
+                       request->query);
 
     return request;
 }
 
 // Fill to_fill with the value of the param in the query
 void fill_query_param(char *query, char param, char *to_fill) {
-    // query: ?f=...&t=...&s=...&n=...    
+    // query: ?f=...&t=...&s=...&n=...
     while (*query) {
         if (*query == param && *(query + 1) == '=') {
-            query += 2; // Skip param and '='
+            query += 2;  // Skip param and '='
             while (*query && *query != '&') {
                 *(to_fill++) = *query++;
             }
@@ -241,38 +244,34 @@ void fill_query_param(char *query, char param, char *to_fill) {
 void redirect(SSL *ssl, char *redirect_to) {
     char response[256];
     int response_len = snprintf(response, sizeof(response),
-            "HTTP/1.1 302 Found\r\n"
-             "Location: %s\r\n"
-             "Content-Length: 0\r\n"
-             "Connection: close\r\n"
-             "\r\n", redirect_to);
+                                "HTTP/1.1 302 Found\r\n"
+                                "Location: %s\r\n"
+                                "Content-Length: 0\r\n"
+                                "Connection: close\r\n"
+                                "\r\n",
+                                redirect_to);
     secure_send(ssl, response, response_len);
 }
-
 
 // SMTPS functions //
 
 // Create email
-void create_email ( char *out,
-                    int out_len,
-                    const char *from,
-                    const char *to,
-                    const char *subject,
-                    const char *body
-                    ) {
-    snprintf(out, 2048, 
-        "Content-Type: multipart/mixed; boundary=\"===============2463790331611798368==\"\r\n"
-        "MIME-Version: 1.0\r\n"
-        "From: %s\r\n"
-        "To: %s\r\n"
-        "Subject: %s\r\n\r\n"
-        "--===============2463790331611798368==\r\n"
-        "Content-Type: text/html; charset=\"us-ascii\"\r\n"
-        "MIME-Version: 1.0\r\n"
-        "Content-Transfer-Encoding: 7bit\r\n\r\n"
-        "%s"
-        "\r\n.\r\n",
-        from, to, subject, body);
+void create_email(char *out, int out_len, const char *from, const char *to,
+                  const char *subject, const char *body) {
+    snprintf(out, 2048,
+             "Content-Type: multipart/mixed; "
+             "boundary=\"===============2463790331611798368==\"\r\n"
+             "MIME-Version: 1.0\r\n"
+             "From: %s\r\n"
+             "To: %s\r\n"
+             "Subject: %s\r\n\r\n"
+             "--===============2463790331611798368==\r\n"
+             "Content-Type: text/html; charset=\"us-ascii\"\r\n"
+             "MIME-Version: 1.0\r\n"
+             "Content-Transfer-Encoding: 7bit\r\n\r\n"
+             "%s"
+             "\r\n.\r\n",
+             from, to, subject, body);
 }
 
 // Send email
@@ -280,18 +279,15 @@ void *secure_send_email(void *args) {
     char in[MAX_IN_LEN], out[MAX_OUT_LEN];
     email_args *emailargs = (email_args *)args;
     SSL *ssl = emailargs->ssl;
-    const char  *mydomain = emailargs->mydomain,
-                *from = emailargs->from,
-                *auth_token = emailargs->auth_token,
-                *to = emailargs->to,
-                *subject = emailargs->subject,
-                *body = emailargs->body;
+    const char *mydomain = emailargs->mydomain, *from = emailargs->from,
+               *auth_token = emailargs->auth_token, *to = emailargs->to,
+               *subject = emailargs->subject, *body = emailargs->body;
 
     // Start SMTPS session
     snprintf(out, MAX_OUT_LEN, "ehlo %s\r\n", mydomain);
     secure_send(ssl, out, strlen(out));
-    sleep(1);   // Server sends multiple responses
-                // Wait for the server to send all the responses
+    sleep(1);  // Server sends multiple responses
+               // Wait for the server to send all the responses
     secure_read(ssl, in, MAX_IN_LEN);
     snprintf(out, MAX_OUT_LEN, "STARTTLS\r\n");
     secure_send(ssl, out, strlen(out));
@@ -329,7 +325,6 @@ void *secure_send_email(void *args) {
 
     // End session
     secure_send(ssl, "QUIT\r\n", 6);
-    
+
     return NULL;
 }
-
