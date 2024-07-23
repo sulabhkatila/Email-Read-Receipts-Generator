@@ -1,4 +1,4 @@
-src/main
-src/obj
-src/logfiles
-
+backend/main
+backend/obj
+backend/logfiles
+backend/assets/openapi.yaml
