@@ -20,9 +20,16 @@ switch_checkbox.addEventListener("change", () => {
           "input[name='subjectbox']"
         ).value;
 
-        const from_arialabel = document
-          .querySelector(".gb_d.gb_ya.gb_z")
-          .getAttribute("aria-label");
+        const one_has_fromarialabel = document.querySelectorAll(".gb_d");
+
+        let from_arialabel = null;
+
+        one_has_fromarialabel.forEach(element => {
+            if (element.hasAttribute('aria-label')) {
+                from_arialabel = element.getAttribute('aria-label');
+            }
+        });
+
         const from = from_arialabel.match(/\(([^)]+)\)/)[1];
         const to_divs = document.querySelectorAll(".oL.aDm.az9");
         let to = "";
