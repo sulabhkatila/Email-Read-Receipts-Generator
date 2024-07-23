@@ -21,4 +21,6 @@ typedef struct db_args {
 void *log_to_db(
     void *args);  // *args need to be able to be type casted to *db_args
 
+int entry_exists(db_args *dbargs);
+
 #endif
