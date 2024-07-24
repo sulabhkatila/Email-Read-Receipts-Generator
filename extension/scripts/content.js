@@ -64,10 +64,11 @@ switch_checkbox.addEventListener("change", () => {
         compose_body.appendChild(tracker);
 
         console.log("tracker added");
+
+        switch_checkbox.checked = false;
       },
       true
     );
-  } else {
   }
 });
 
