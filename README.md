@@ -44,6 +44,11 @@ You should see the `extension` directory listed.
 2. Enable `Developer mode` by clicking the toggle switch in the top right corner.
 3. Click `Load unpacked` and select the extension directory.
 
+### Installation Demo:
+
+#### Using Git:
+https://github.com/user-attachments/assets/830daade-658e-4a1e-b1bf-08736d436df5
+
 
 ## Usage
 Email like you, normally, would. Just turn the receipts switch on before sending to get receipts.
@@ -53,4 +58,3 @@ Email like you, normally, would. Just turn the receipts switch on before sending
 
 - Receipts turned on:</br>
 <img width="449" alt="Screenshot 2024-07-01 at 7 52 11 PM" src="https://github.com/sulabhkatila/Email-Read-Receipts/assets/113466992/39a46f75-3ee6-468a-8a7c-ee64a66b4dad">
-
