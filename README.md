@@ -4,10 +4,6 @@
 
 https://github.com/user-attachments/assets/58cb1739-1ce7-414e-8e70-b2442e4cd89a
 
-This project consists of two main components:
-1. **Backend**: A server written in C, handling HTTPS and SMTP protocols to generate and send email read receipts.
-2. **Extension**: A Chrome extension that allows users to track their emails by adding a tracking pixel before sending.
-
 ## Installation
 ### 1. Get the ```extension```.
 
