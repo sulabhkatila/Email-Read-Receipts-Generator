@@ -11,7 +11,9 @@ This project consists of two main components:
 ## Installation
 ### 1. Get the ```extension```.
 
-Go to your terminal and run the following:
+#### If you have `Git` installed (See below for installation without using Git):
+1. Open your `terminal` (`Command Prompt` on `Windows`)
+2. Run the following:
 
 ```sh
 mkdir my_extensions
@@ -23,12 +25,23 @@ echo "extension" >> .git/info/sparse-checkout
 git pull origin main
 ```
 
-The `extension` directory is now on your computer. You can verify this by running:
+3. The `extension` directory is now on your computer. You can verify this by running:
 ```sh
 ls
 ```
 
 You should see the `extension` directory listed.
+
+#### If you don't have `Git`:
+1. Open your web browser and navigate to the GitHub repository: https://github.com/sulabhkatila/email-read-receipts-generator.
+
+2. On the repository page, click the green "Code" button located near the top right corner.
+
+3. In the dropdown menu, click "Download ZIP" to download the repository as a ZIP file.
+
+4. Once the ZIP file is downloaded, extract its contents to a directory of your choice.
+
+5. After extraction, navigate to the extracted folder and locate the extension directory.
 
 ### 2. Add the extension to chrome
 1. Open Chrome and go to `chrome://extensions/` (`brave://extensions` for brave).
