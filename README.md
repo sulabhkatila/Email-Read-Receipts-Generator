@@ -9,10 +9,32 @@ This project consists of two main components:
 2. **Extension**: A Chrome extension that allows users to track their emails by adding a tracking pixel before sending.
 
 ## Installation
-1. Download the '''extension''' directory.
-2. Open Chrome and go to `chrome://extensions/`.
-3. Enable "Developer mode" by clicking the toggle switch in the top right corner.
-4. Click "Load unpacked" and select the `extension` directory.
+### 1. Get the ```extension```.
+
+Go to your terminal and run the following:
+
+```sh
+mkdir my_extensions
+cd my_extensions
+git init
+git remote add origin https://github.com/sulabhkatila/email-read-receipts-generator.git
+git config core.sparseCheckout true
+echo "extension" >> .git/info/sparse-checkout
+git pull origin main
+```
+
+The `extension` directory is now on your computer. You can verify this by running:
+```sh
+ls
+```
+
+You should see the `extension` directory listed.
+
+### 2. Add the extension to chrome
+1. Open Chrome and go to `chrome://extensions/` (`brave://extensions` for brave).
+2. Enable `Developer mode` by clicking the toggle switch in the top right corner.
+3. Click `Load unpacked` and select the extension directory.
+
 
 ## Usage
 Email like you, normally, would. Just turn the receipts switch on before sending to get receipts.
