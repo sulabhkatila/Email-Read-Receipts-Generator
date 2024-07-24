@@ -49,9 +49,9 @@ void *log_to_db(void *args) {
 }
 
 // Check if an entry exists
-int entry_exists(db_args *dbargs) {
+int number_of_entries(db_args *dbargs) {
     sqlite3 *db;
-    int exists = 0;
+    int count = 0;
 
     if (strcmp(dbargs->table, SIGNATURE_RECEIPT_TABLE) == 0) {
         int status = sqlite3_open(dbargs->db_path, &db);
@@ -81,12 +81,12 @@ int entry_exists(db_args *dbargs) {
 
         status = sqlite3_step(res);
         if (status == SQLITE_ROW) {
-            exists = sqlite3_column_int(res, 0);
+            count = sqlite3_column_int(res, 0);
         }
 
         sqlite3_finalize(res);
         sqlite3_close(db);
     }
 
-    return exists;
+    return count;
 }

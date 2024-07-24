@@ -143,7 +143,9 @@ int main(int argc, char *argv[]) {
                 //
                 // If an entry has not been made including the from, to,
                 // subject, n_code, it is that request
-                int trigger_email = entry_exists(&sr_args);
+                //
+                // Generate receipt only for the first opening
+                int total_entries = number_of_entries(&sr_args);
 
                 pthread_create(&log_thread, NULL, log_to_db, (void *)&sr_args);
                 is_logging = 1;
@@ -166,7 +168,7 @@ int main(int argc, char *argv[]) {
                          "%s at %s (%s).</br></p>"
                          "<p></p><p></p><p>Thank you!</p>",
                          from, to, subject, datestr, timestr, TIMEZONE);
-                if (trigger_email) {
+                if (total_entries == 1) {
                     email_args ea = {
                         smtp_ssl, MYDOMAIN,      EMAIL, AUTH_TOKEN,
                         from,     EMAIL_SUBJECT, body,
