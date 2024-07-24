@@ -1,13 +1,11 @@
 :root {
-    --c-dark: ;
-    --c-red: ;
-    --c-white: ;
+    --c-light: #ecf0f1;
     
-    --f-xl: ;
-    --f-lg: ;
-    --f-md: ;
-    --f-s: ;
-    --f-xs: ;
+    --s-xl: 1.5rem;
+    --s-lg: 1.2rem;
+    --s-md: 0.9rem;
+    --s-s: 0.7rem;
+    --s-xs: 0.4rem;
 }
 
 *,
@@ -18,31 +16,34 @@
 
 body {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    height: 500px;
-    width: 400px;
+    font-size: var(--s-md);
+    background-color: var(--c-light);
+    padding: var(--s-xs);
+    height: auto;
+    min-width: 400px;
     display: flex;
     flex-direction: column;
-    border-radius: 0.5rem;
 }
 
-.header {
+.header-div {
     display: flex;
-    width: 100%;
-    border-radius: 0.5rem;
+    justify-content: center;
+    align-items: center;
+    height: 50px;
+    font-size: var(--s-xl);
+    margin-bottom: var(--s-s);
+    border-bottom: 1.5px solid;
 }
 
-.nav {
+.header-div,
+.nav-div,
+.main-div,
+.footer-div {
     width: 100%;
-    border-radius: 0.5rem;
 }
 
-.main {
-    width: 100%;
-    border-radius: 0.5rem;
+.main-div img {
+    max-width: 100%;
+    height: auto;
+    margin-bottom: var(--s-xl);
 }
-
-.footer {
-    width: 100%;
-    border-radius: 0.5rem;
-}
-
