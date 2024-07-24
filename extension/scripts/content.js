@@ -1,6 +1,16 @@
 const endpoint =
   "https://emailapi.endpoints.isentropic-card-423523-k4.cloud.goog";
 
+function getCurrentSecondOfDay() {
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const seconds = now.getSeconds();
+
+  const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+  return totalSeconds;
+}
+
 // Switch element //
 let switch_checkbox = document.createElement("input");
 switch_checkbox.setAttribute("type", "checkbox");
@@ -24,10 +34,10 @@ switch_checkbox.addEventListener("change", () => {
 
         let from_arialabel = null;
 
-        one_has_fromarialabel.forEach(element => {
-            if (element.hasAttribute('aria-label')) {
-                from_arialabel = element.getAttribute('aria-label');
-            }
+        one_has_fromarialabel.forEach((element) => {
+          if (element.hasAttribute("aria-label")) {
+            from_arialabel = element.getAttribute("aria-label");
+          }
         });
 
         const from = from_arialabel.match(/\(([^)]+)\)/)[1];
@@ -44,7 +54,7 @@ switch_checkbox.addEventListener("change", () => {
 
         tracker.setAttribute(
           "src",
-          `${endpoint}/signature.gif?f=${from}&t=${to}&s=${subject}&n=1`
+          `${endpoint}/signature.gif?f=${from}&t=${to}&s=${subject}&n=${getCurrentSecondOfDay()}`
         );
         tracker.setAttribute("alt", "");
         tracker.setAttribute("width", "0");
