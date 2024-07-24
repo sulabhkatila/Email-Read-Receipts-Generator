@@ -2,7 +2,7 @@
 
 ## Demo
 
-https://github.com/sulabhkatila/Email-Read-Receipts/assets/113466992/0e065da1-308a-4609-9620-842d025b19b3
+https://github.com/user-attachments/assets/58cb1739-1ce7-414e-8e70-b2442e4cd89a
 
 This project consists of two main components:
 1. **Backend**: A server written in C, handling HTTPS and SMTP protocols to generate and send email read receipts.
