@@ -5,10 +5,11 @@
 https://github.com/user-attachments/assets/58cb1739-1ce7-414e-8e70-b2442e4cd89a
 
 ## Installation
+### (The servers have been disabled. If you wish to use the extension, first, make sure to compile and run ```main.c``` from ```backend``` folder)
+
 ### 1. Get the ```extension```.
 
 #### If you have `Git` installed (See below for installation without using Git):
-(The servers have been disabled. If you wish to use the extension, first, make sure to compile and run ```main.c``` from ```backend``` folder)
 
 
 1. Open your `terminal` (`Command Prompt` on `Windows`)
